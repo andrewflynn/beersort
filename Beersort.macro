@@ -1,0 +1,325 @@
+
+'''''''''' Data manipulation program written for the ''''''''''''''
+'''''''''' UIUC Rocks Dept 9/13/2006                 ''''''''''''''
+'''''''''' by                                        ''''''''''''''
+'''''''''' Andrew Flynn <aflynn@gmail.com>           ''''''''''''''
+
+'' Input: A .xls file with three worksheets with any names.
+''        Wksht 1 contains the raw imported data; Wksht 2 and Wksht 3 sheets are blank
+''        Wksht 1 has the following format:
+''
+''        Dye/Sample | Sample File Name | ...more columns... | Size | Height | ...more columns...
+''        ---------------------------------------------------------------------------------------
+''            ...    |       ...        |       ...          |  ... |  ...   |     ...
+''
+'' Output: All entries with size < 50 or height < 100 are removed from Wksht 1
+''         Wksht 2 has the following output:
+''               (File sizes have no row correlation with the fragment size)
+''
+''         Fragment Size | File1 Size | File1 Height | File2 Size | File2 Height | ...more columns...
+''         ------------------------------------------------------------------------------------------
+''              ...      |     ...    |      ...     |     ...    |      ...     |      ...
+''
+''         Wksht 3 has the following output:
+''               File sizes are rounded to the nearest integer and placed in the same row as that
+''                  fragment size.
+''               File sizes are removed so that the File height is correlated by row to its fragment size
+''               Any fragment sizes not represented by a File sample are removed
+''               Below this table are the total heights summed by column
+''               Another size-identical table is below this with the relative height of
+''               each particular file out of the total amount of their sum
+''
+''         Fragment Size | File1 Height     | File2 Height     | File3 Height     | ...more columns...
+''         ----------------------------------------------------------------------------------------------
+''              ...      |     ...          |      ...         |     ...          |      ...
+''         ----------------------------------------------------------------------------------------------
+''                       | Height1 Total    | Height2 Total    | Height3 Total    | ...more columns...
+''         ----------------------------------------------------------------------------------------------
+''                       |                  |                  |                  |
+''         ----------------------------------------------------------------------------------------------
+''         Fragment Size | Relative Height1 | Relative Height2 | Relative Height3 | ...more columns...
+''         ----------------------------------------------------------------------------------------------
+''              ...      |       ...        |     ...          |      ...         |      ...
+
+Sub Beersort()
+
+Dim size_marker As Integer
+Dim sum As Long
+Dim val As Integer
+Dim at As Integer
+Dim largest_size As Double
+Dim offset As Integer
+Dim target_offset As Integer
+Dim target_offset_row As Integer
+
+'Speeds update process up and avoids flicker-screen
+Application.ScreenUpdating = False
+
+'First read information Wksht 1
+Sheets(1).Activate
+
+'Find what column the "Size" is
+size_marker = 1
+Do While (True)
+    If (Cells(1, size_marker) = "Size") Then Exit Do
+        size_marker = size_marker + 1
+Loop
+
+'Run down the size column to find the largest_size so we know
+'how many rows the next two worksheets will need
+'Also remove all entries that have size < 50 and height < 100
+largest_size = 0
+offset = 2
+Do While (True)
+    If (Cells(offset, 2) = 0) Then Exit Do
+        'If we've found a new largest size
+        If (largest_size < Cells(offset, size_marker).Value) Then
+            largest_size = Cells(offset, size_marker).Value
+        End If
+        'If we need to delete a row
+        If (Cells(offset, size_marker).Value < 50 Or Cells(offset, size_marker + 1).Value < 100) Then
+            Cells(offset, size_marker).EntireRow.Delete
+        'Only increment if we have not deleted (a delete is a logical increment)
+        Else
+            offset = offset + 1
+        End If
+Loop
+
+'Write out the fragment sizes (50->largest_size) that we're dealing with
+val = 50
+offset = 3
+Sheets(2).Cells(1, 1).Value = "Fragment"
+Sheets(2).Cells(2, 1).Value = "Size"
+Do While (True)
+    If (val > largest_size) Then Exit Do
+        Sheets(2).Cells(offset, 1).Value = val
+    val = val + 1
+    offset = offset + 1
+Loop
+
+'Loop that runs down the file/size/height column vertically in Wksht 1
+'and copies these horizontally into Wksht 2
+'It copies all the sizes and heights from a single sample file name in Wksht 1
+'and copies that underneath that sample file name in Wksht 2
+'When it finds a new file name that it's dealing with, start over in a new column in Wksht 2
+offset = 2
+target_offset = 3
+target_offset_row = 3
+'Copy the first file name and values, to get started so we have a value for comparison
+'in the Do While Loop
+Sheets(2).Cells(1, target_offset).Value = Cells(offset, 2).Value
+Sheets(2).Cells(target_offset_row, target_offset - 1).Value = Cells(offset, size_marker).Value
+Sheets(2).Cells(target_offset_row, target_offset).Value = Cells(offset, size_marker + 1).Value
+offset = offset + 1
+target_offset_row = target_offset_row + 1
+Do While (True)
+    If (Cells(offset, 2) = 0) Then Exit Do
+        'If the file name is still the same, continue copying vertically in Wksht2
+        If (Cells(offset, 2).Value = Cells(offset - 1, 2).Value) Then
+            Sheets(2).Cells(target_offset_row, target_offset - 1).Value = Cells(offset, size_marker).Value
+            Sheets(2).Cells(target_offset_row, target_offset).Value = Cells(offset, size_marker + 1).Value
+            target_offset_row = target_offset_row + 1
+        'Else the file name, has changed and we need to scoot over two columns for a new file name
+        Else
+            target_offset = target_offset + 2
+            Sheets(2).Cells(1, target_offset).Value = Cells(offset, 2).Value
+            target_offset_row = 3
+        End If
+    offset = offset + 1
+Loop
+
+'Fill in the Size/Height column headers for each file sample name
+offset = 2
+Do While (True)
+    If (Sheets(2).Cells(1, offset + 1) = 0) Then Exit Do
+        Sheets(2).Cells(2, offset) = "Size"
+        Sheets(2).Cells(2, offset + 1) = "Height"
+    offset = offset + 2
+Loop
+
+
+
+
+
+'We're now reading values from Wksht 2
+Sheets(2).Activate
+
+'Copy over File Sample names
+offset = 1
+Do While (True)
+    If (Cells(1, offset) = 0) Then Exit Do
+    
+    Sheets(3).Cells(1, offset).Value = Cells(1, offset).Value
+    offset = offset + 2
+Loop
+
+'Copy over Size/Height Column headers for each file sample name
+offset = 1
+Do While (True)
+    If (Cells(2, offset) = 0) Then Exit Do
+
+    Sheets(3).Cells(2, offset).Value = Cells(2, offset).Value
+    offset = offset + 1
+Loop
+
+'Copy over Fragment Size values
+offset = 3
+Do While (True)
+    If (Cells(offset, 1) = 0) Then Exit Do
+
+    Sheets(3).Cells(offset, 1).Value = Cells(offset, 1).Value
+    offset = offset + 1
+Loop
+
+'This function written by Peter Berger
+'Redistributes size/height pairs so that they are aligned by row with the proper fragment size
+'Size is first rounded and then placed in the correct row
+offset = 3
+target_offset = 2
+Do While (True)
+    If (Cells(offset, target_offset) = 0) Then Exit Do
+
+    Do While (True)
+        If (Cells(offset, target_offset) = 0) Then Exit Do
+            val = Cells(offset, target_offset).Value
+            at = 3
+            Do While (True)
+                If (Cells(at, 1) = 0) Then Exit Do
+                    If (Round(Cells(at, 1).Value, 0) = Round(val, 0)) Then
+                        Sheets(3).Cells(at, target_offset).Value = val
+                        Sheets(3).Cells(at, target_offset + 1).Value = Cells(offset, target_offset + 1).Value
+                    End If
+                at = at + 1
+            Loop
+        offset = offset + 1
+    Loop
+    target_offset = target_offset + 2
+    offset = 3
+Loop
+
+
+'We are now working purely off of Wksht 3
+Sheets(3).Activate
+
+'Heights are now aligned with the proper Fragment Size, so their individual size columns can be deleted
+offset = 2
+Do While (True)
+    If (Cells(2, offset) = 0) Then Exit Do
+        If (Cells(2, offset) = "Size") Then
+            Cells(2, offset).EntireColumn.Delete
+        Else
+            offset = offset + 1
+        End If
+Loop
+
+'Find out the column number of the last sample file name we have.
+'val is later used when deleting empty fragment sizes
+val = 1
+Do While (True)
+    If (Cells(1, val) = 0) Then Exit Do
+        val = val + 1
+Loop
+
+'Run through all of the rows.  If we find a value, move on to the next row
+'If we make it to the last column and none of the sample files included a height value, delete that row
+offset = 3
+target_offset = 2
+Do While (True)
+    'Once we reach the end of the largest fragment size, exit
+    If (Cells(offset, 1) = 0) Then Exit Do
+        Do While (True)
+            'If their is a height value, exit
+            If (Cells(offset, target_offset) <> 0) Then Exit Do
+                'If there's no value, check to see if we're at the last column
+                'If so, delete this row, then go back a row, because later
+                'the for loop increments (and a row delete is a logical increment)
+                If (target_offset = val) Then
+                    Cells(offset, target_offset).EntireRow.Delete
+                    offset = offset - 1
+                    Exit Do
+                'Else we're still empty, move on to the next column
+                Else
+                    target_offset = target_offset + 1
+                End If
+        Loop
+    offset = offset + 1
+    target_offset = 2
+Loop
+
+'Total up each of the columns for each file name and put the value below it
+val = offset + 1
+Cells(val, 1).Value = "Total"
+offset = 3
+target_offset = 2
+sum = 0
+Do While (True)
+    'Once we've totalled for all the sample file names
+    If (Cells(1, target_offset) = 0) Then Exit Do
+        Do While (True)
+            'Once we've added up all the possible fragment sizes, quit
+            If (offset = val - 1) Then Exit Do
+                'For each non-empty value, add it to the sum
+                If (Cells(offset, target_offset) <> 0) Then
+                    sum = sum + Cells(offset, target_offset).Value
+                End If
+            offset = offset + 1
+        Loop
+    'Write this sum in below the column
+    Cells(val, target_offset).Value = sum
+    target_offset = target_offset + 1
+    offset = 3
+    'Starting over with a new column, sum = 0
+    sum = 0
+Loop
+            
+'Aesthetics
+val = val + 2
+Cells(val, 1) = "Fragment"
+Cells(val + 1, 1) = "Size"
+Cells(val, 2) = "Relative"
+Cells(val + 1, 2) = "Peak Height"
+
+'Copy over the sample file names to another row below the original table
+target_offset = 2
+Do While (True)
+    If (Cells(1, target_offset) = 0) Then Exit Do
+        Cells(val + 2, target_offset).Value = Cells(1, target_offset).Value
+    target_offset = target_offset + 1
+Loop
+
+'Copy over the possible fragment size values
+target_offset = 3
+Do While (True)
+    If (Cells(target_offset, 1) = 0) Then Exit Do
+        Cells(val + target_offset, 1).Value = Cells(target_offset, 1).Value
+    target_offset = target_offset + 1
+Loop
+
+'Fill in all the relative height values for each sample file name
+'Run through each peak in each sample, dividing by its column's total
+offset = 3
+target_offset = 2
+Do While (True)
+    'Once we finish the last sample file name, exit
+    If (Cells(1, target_offset) = 0) Then Exit Do
+        Do While (True)
+            'Once we pass the largest possible fragment size
+            If (offset = val - 1) Then Exit Do
+                'First check for empty value
+                'If nonempty, divide and fill in answer
+                If (Cells(offset, target_offset) <> 0) Then
+                    Cells(offset + val, target_offset) = Cells(offset, target_offset).Value / Cells(val - 2, target_offset)
+                'Else, just put zero
+                Else
+                    Cells(offset + val, target_offset) = 0
+                End If
+            offset = offset + 1
+        Loop
+    target_offset = target_offset + 1
+    offset = 3
+Loop
+
+'Don't forget to upt ScreenUpdating back to true, or else we won't see changes!
+Application.ScreenUpdating = True
+
+End Sub
